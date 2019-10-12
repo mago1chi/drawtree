@@ -1,14 +1,21 @@
 from django.shortcuts import render
+from graphviz import Digraph
 import re
-import json
-
-# Create your views here.
+import datetime
 
 def index(request):
-    return render(request, 'drawlogic/colatest3.html', {'path_to_json': 'drawlogic/cities.json'})
+    sample_text = "主張\n  枠組み1\n    理由1\n    理由2\n    理由3\n  枠組み2\n    理由4\n    理由5\n    理由6\n  枠組み3\n    理由7\n    理由8\n"
+    return render(request, 'drawlogic/colatest3.html', {'prev_text_body': sample_text, 'image_file_name': "drawlogic/sample.png"})
 
 def draw(request):
-    text_body = request.POST['text_logictree'].splitlines()
+    # セッションキーの取得
+    if not request.session.session_key:
+      request.session.create() 
+    
+    session_key = request.session.session_key
+
+    prev_text_body = request.POST['text_logictree']
+    text_body = prev_text_body.splitlines()
     
     # 入力されたメッセージを一行ごとに正規表現でパースし、
     # 各行のID、階層レベル、メッセージを辞書型で抽出＆リスト化
@@ -22,35 +29,27 @@ def draw(request):
                 }
         parsed_body_list.append(tmp_dict)
     
-    node_list = [{
-        "name": parsed_body_list[0]["message"],
-        "width": 200,
-        "height": 40
-        }] #各ノードのメッセージを保持するリスト（rootノード情報のみ初期状態で格納）
-    link_list = [] #ノード間のリンク情報を保持するリスト
+    # 有向グラフオブジェクトをインスタンス化
+    graph_body = Digraph(format="png")
+    graph_body.attr('node', shape='box', fontname='MS Gothic')
+
     parent_info_dict = {} #各階層レベルに対応する親ノード情報を保持する辞書
-    parent_id = 0 #親ノードのIDを記録する変数
+    parent_message = ""
     parent_depth = 0 #親ノードの階層レベルを記録する変数
     depth_diff = 0 #親ノードと直下の子ノードの深さを記録する変数
+    graph_body.node(name=parsed_body_list[0]["message"], style='filled')
     
     # 各ノードごとにノード情報、リンク情報を抽出
     for index in range(1, len(parsed_body_list)):
-        # 当該ノードのノード情報を記録
-        node_list.append({
-            "name": parsed_body_list[index]["message"],
-            "width": 200,
-            "height": 40
-            })
-        
         # 一つ深い階層に移動した際の処理
         if parsed_body_list[index]["depth"] - parent_depth > depth_diff:
             # 親ノード情報を更新
-            parent_id = parsed_body_list[index-1]["id"]
+            parent_message = parsed_body_list[index-1]["message"]
             parent_depth = parsed_body_list[index-1]["depth"]
             
             # 現在の深さに対応する親ノード情報を記録（階層が浅い位置に戻った際に利用）
             parent_info_dict[parsed_body_list[index]["depth"]] = {
-                    "parent_id": parent_id,
+                    "parent_message": parent_message,
                     "parent_depth": parent_depth
                     }
             
@@ -59,25 +58,23 @@ def draw(request):
         
         # 階層が浅い位置に戻った際の処理
         elif parsed_body_list[index]["depth"] - parent_depth < depth_diff:
-            # 現在の深さに対応する過去の親ノード情報からparent_id、parent_depthを更新
-            parent_id = parent_info_dict[parsed_body_list[index]["depth"]]["parent_id"]
-            parent_depth = parent_info_dict[parsed_body_list[index]["depth"]]["parent_depth"]
+            try:
+                # 現在の深さに対応する過去の親ノード情報からparent_message、parent_depthを更新
+                parent_message = parent_info_dict[parsed_body_list[index]["depth"]]["parent_message"]
+                parent_depth = parent_info_dict[parsed_body_list[index]["depth"]]["parent_depth"]
+            except KeyError:
+                return render(request, 'drawlogic/colatest3.html', {'err_message':"各階層のインデントを揃えてください。", 'prev_text_body': prev_text_body})
             
             # 階層移動を検知するために親ノードと直下の子ノードの深さ差分を記録
             depth_diff = parsed_body_list[index]["depth"] - parent_depth
         
-        # 当該ノードのリンク情報を記録
-        link_list.append({
-                "source": parsed_body_list[index]["id"],
-                "target": parent_id,
-                })
+        # 親ノードと現在のノードを結線
+        graph_body.node(name=parsed_body_list[index]["message"], fontname="MS Gothic")
+        graph_body.edge(parent_message, parsed_body_list[index]["message"])
         
-    # cold.jsに読み込ませるグラフ情報をまとめる
-    json_body = {"nodes": node_list, "links": link_list}
+    # 画像のレンダリング処理
+    file_name = session_key+"_"+datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    graph_body.render(filename=file_name, directory="drawlogic/static/drawlogic/graph/")
     
-    # グラフ情報をjsonファイルとして書き出し、cola.jsが読み込めるようにする
-    with open('C:/Users/shoul/OneDrive/ドキュメント/ものづくり/ロジックツリー作成ツール/logictree/drawlogic/static/drawlogic/tmp.json', 'w') as f:
-        f.write(json.dumps(json_body))
-    
-    return render(request, 'drawlogic/colatest3.html', {'path_to_json': 'drawlogic/tmp.json'})
+    return render(request, 'drawlogic/colatest3.html', {'image_file_name':"drawlogic/graph/"+file_name+".png", 'prev_text_body': prev_text_body})
 
