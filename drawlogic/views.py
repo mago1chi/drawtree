@@ -69,7 +69,6 @@ def draw(request):
             depth_diff = parsed_body_list[index]["depth"] - parent_depth
         
         # 親ノードと現在のノードを結線
-        graph_body.node(name=parsed_body_list[index]["message"], fontname="MS Gothic")
         graph_body.edge(parent_message, parsed_body_list[index]["message"])
         
     # 画像のレンダリング処理
