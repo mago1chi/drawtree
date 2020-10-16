@@ -31,7 +31,7 @@ def draw(request):
     
     # 有向グラフオブジェクトをインスタンス化
     graph_body = Digraph(format="png")
-    graph_body.attr('node', shape='box', fontname='MS Gothic')
+    graph_body.attr('node', shape='box', fontname='IPAGothic')
 
     parent_info_dict = {} #各階層レベルに対応する親ノード情報を保持する辞書
     parent_message = ""
@@ -73,7 +73,8 @@ def draw(request):
         
     # 画像のレンダリング処理
     file_name = session_key+"_"+datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    graph_body.render(filename=file_name, directory="drawlogic/static/drawlogic/graph/")
+    #graph_body.render(filename=file_name, directory="drawlogic/static/drawlogic/graph/")
+    graph_body.render(filename=file_name, directory="/var/www/html/drawtree/drawlogic/static/drawlogic/graph/")
     
     return render(request, 'drawlogic/colatest3.html', {'image_file_name':"drawlogic/graph/"+file_name+".png", 'prev_text_body': prev_text_body})
 
